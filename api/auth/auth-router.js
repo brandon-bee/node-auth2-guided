@@ -1,11 +1,23 @@
 const bcrypt = require('bcryptjs')
-
+const jwt = require('jsonwebtoken')
 const router = require('express').Router()
-const User = require('../users/users-model.js')
+const Users = require('../users/users-model.js')
+const { checkRole } = require('./auth-middleware')
+const { BCRYPT_ROUNDS, TOKEN_SECRET } = require('../../config')
 
-const { BCRYPT_ROUNDS } = require('../../config')
+function buildToken(user) {
+  const payload = {
+    subject: user.id,
+    username: user.username,
+    role: user.role
+  }
+  const options = {
+    expiresIn: '1d'
+  }
+  return jwt.sign(payload, TOKEN_SECRET, options)
+}
 
-router.post('/register', (req, res, next) => {
+router.post('/register', checkRole, (req, res, next) => {
   let user = req.body
 
   // bcrypting the password before saving
@@ -13,20 +25,24 @@ router.post('/register', (req, res, next) => {
   // never save the plain text password in the db
   user.password = hash
 
-  User.add(user)
+  Users.add(user)
     .then(saved => {
       res.status(201).json({ message: `Great to have you, ${saved.username}` })
     })
     .catch(next) // our custom err handling middleware in server.js will trap this
 })
 
-router.post('/login', (req, res, next) => {
+router.post('/login', checkRole, (req, res, next) => {
   let { username, password } = req.body
 
-  User.findBy({ username })
+  Users.findBy({ username })
     .then(([user]) => {
       if (user && bcrypt.compareSync(password, user.password)) {
-        res.status(200).json({ message: `Welcome back ${user.username}...` })
+        const token = buildToken(user)
+        res.status(200).json({
+          message: `Welcome back ${user.username}...`,
+          token
+        })
       } else {
         next({ status: 401, message: 'Invalid Credentials' })
       }

@@ -4,7 +4,18 @@ const User = require("./users-model.js")
 
 const { restricted } = require('../auth/auth-middleware')
 
-router.get("/", restricted, (req, res, next) => {
+const only = (role) => (req, res, next) => {
+  if (req.decodedJwt.role === role) {
+    next()
+  } else {
+    next({
+      status: 403,
+      message: 'you have no power here'
+    })
+  }
+}
+
+router.get("/", restricted, only('admin'), (req, res, next) => {
   User.find()
     .then(users => {
       res.json(users)
